@@ -7,6 +7,13 @@
 #define NK_INCLUDE_DEFAULT_FONT
 #define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define _USE_MATH_DEFINES
+#include <math.h>
+
 #include <glad/glad.h>
 #include <glfw/glfw3.h>
 
@@ -15,9 +22,6 @@
 
 #define NK_GLFW_GL3_IMPLEMENTATION
 #include "nuklear_glfw_gl3.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 #define MAX_VERTEX_BUFFER 512 * 1024
 #define MAX_ELEMENT_BUFFER 128 * 1024
@@ -69,7 +73,8 @@ int main(void) {
     }
 
     struct nk_glfw glfw = {0};
-    struct nk_context *ctx = nk_glfw3_init(&glfw, win, NK_GLFW3_INSTALL_CALLBACKS);
+    //struct nk_context *ctx = nk_glfw3_init(&glfw, win, NK_GLFW3_INSTALL_CALLBACKS);
+    struct nk_context *ctx = nk_glfw3_init(win, NK_GLFW3_INSTALL_CALLBACKS);
     lineCoordinate *cube = initCube();
     lineCoordinate *originalCube = initCube();
     if (!cube) {
@@ -77,10 +82,10 @@ int main(void) {
     }
 
     struct nk_font_atlas *atlas;
-    nk_glfw3_font_stash_begin(&glfw, &atlas);
+    nk_glfw3_font_stash_begin(&atlas);
     struct nk_font_config cfg = nk_font_config(0);
     struct nk_font *font = nk_font_atlas_add_default(atlas, 14.0f, &cfg);
-    nk_glfw3_font_stash_end(&glfw);
+    nk_glfw3_font_stash_end();
     nk_style_set_font(ctx, &font->handle);
 
     float angle = 0.0f;
@@ -91,7 +96,7 @@ int main(void) {
 
     while (!glfwWindowShouldClose(win)) {
         glfwPollEvents();
-        nk_glfw3_new_frame(&glfw);
+        nk_glfw3_new_frame();
 
         float rotationMatrix[9];
         int winWidth, winHeight;
@@ -159,11 +164,11 @@ int main(void) {
             }
         }
 
-        nk_glfw3_render(&glfw, NK_ANTI_ALIASING_ON, MAX_VERTEX_BUFFER, MAX_ELEMENT_BUFFER);
+        nk_glfw3_render(NK_ANTI_ALIASING_ON, MAX_VERTEX_BUFFER, MAX_ELEMENT_BUFFER);
         glfwSwapBuffers(win);
     }
 
-    nk_glfw3_shutdown(&glfw);
+    nk_glfw3_shutdown();
     glfwDestroyWindow(win);
     glfwTerminate();
     free(cube);
