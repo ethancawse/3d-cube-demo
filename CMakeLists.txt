@@ -17,6 +17,17 @@ set(PROJECT_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include CACHE PATH "Public headers")
 # Pull GLFW
 add_subdirectory(${THIRD_PARTY_DIR}/glfw)
 
+# Force Clang on macOS for ObjC
+if(APPLE)
+  set(CMAKE_C_COMPILER /usr/bin/clang CACHE STRING "" FORCE)
+  set(CMAKE_CXX_COMPILER /usr/bin/clang++ CACHE STRING "" FORCE)
+
+  target_compile_options(glfw PRIVATE
+    $<$<COMPILE_LANGUAGE:OBJC>:-fblocks>
+  )
+  #target_link_options(3d-cube-demo PRIVATE -ObjC)
+endif()
+
 # GLAD loader
 add_library(glad STATIC
   ${THIRD_PARTY_DIR}/glad/src/glad.c
