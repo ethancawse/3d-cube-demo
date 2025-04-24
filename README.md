@@ -1,3 +1,4 @@
 # 3d-cube-demo
 
-git clone --recurse-submodules git@github.com:ethancawse/3d-cube-demo.git
+```bash
+git clone --recurse-submodules https://github.com/ethancawse/3d-cube-demo.git
