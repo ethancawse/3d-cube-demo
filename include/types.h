@@ -5,12 +5,16 @@ typedef struct {
 } Proj;
 
 typedef struct {
-    float startX, startY, startZ;
-    float endX, endY, endZ;
-} LineCoordinate;
-
-typedef struct {
     int  edgeCount;
     int  dimension;
     float *data;
 } EdgeList;
+
+typedef struct {
+    float u;
+    float v;
+    float w;
+    float x;
+    float y;
+    float z;
+} AngleList;

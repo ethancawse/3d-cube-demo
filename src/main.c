@@ -32,10 +32,8 @@
 Proj projectPerspective3D(float, float, float, float, float, float, float);
 Proj projectNormal3D(float, float, float, float, float);
 EdgeList createCube(int);
-void getXRotationMatrix3D(float, float out[9]);
-void getYRotationMatrix3D(float, float out[9]);
-void getZRotationMatrix3D(float, float out[9]);
-void matrixMultiply3D(float *, LineCoordinate *);
+void getRotationMatrix3D(AngleList, float out[9], int);
+void matrixMultiply(const float *, EdgeList *);
 
 int main(void) {
     printf("Starting program...\n");
@@ -66,11 +64,6 @@ int main(void) {
 
     struct nk_glfw glfw = {0};
     struct nk_context *ctx = nk_glfw3_init(win, NK_GLFW3_INSTALL_CALLBACKS);
-    LineCoordinate *cube = initCube3D();
-    LineCoordinate *originalCube = initCube3D();
-    if (!cube) {
-        printf("Cube memory allocation failed for some reason");
-    }
 
     struct nk_font_atlas *atlas;
     nk_glfw3_font_stash_begin(&atlas);
@@ -79,9 +72,7 @@ int main(void) {
     nk_glfw3_font_stash_end();
     nk_style_set_font(ctx, &font->handle);
 
-    float angleX = 0.0f;
-    float angleY = 0.0f;
-    float angleZ = 0.0f;
+    AngleList angles = {0};
     double lastTime = glfwGetTime();
     float fpsAccumulator = 0.0f;
     int fpsFrameCount = 0;
@@ -92,6 +83,10 @@ int main(void) {
     float fovY = 90.0f;
     float radianPerSecond = 50.0f * (M_PI/180.0f);
     int dimension = 3;
+
+    EdgeList cube = createCube(dimension);
+    EdgeList originalCube = createCube(dimension);
+    if (!cube.data || !originalCube.data) printf("Cube memory allocation failed for some reason.");
 
     while (!glfwWindowShouldClose(win)) {
         glfwPollEvents();
@@ -113,14 +108,14 @@ int main(void) {
 
         if (fpsAccumulator >= 1.0f) {
             float fps = fpsFrameCount / fpsAccumulator;
-            printf("FPS: %.2f\n", fps);
+            printf("FPS: %.1f\n", fps);
             char title[64];
             snprintf(title, sizeof(title), "FPS: %.1f", fps);
             glfwSetWindowTitle(win, title);
             fpsAccumulator -= 1.0f;
             fpsFrameCount = 0;
         }
-        memcpy(cube, originalCube, 12 * sizeof(*cube)); // reset cube
+        memcpy(cube.data, originalCube.data, cube.edgeCount * 2 * cube.dimension * sizeof(float)); // reset cube
 
         if (nk_begin(ctx, "Rotation Controls", nk_rect(10, 10, 150, 90), NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR)) {
             nk_layout_row_dynamic(ctx, 10, 1);
@@ -138,27 +133,31 @@ int main(void) {
         }
         nk_end(ctx);
 
-        getXRotationMatrix3D(angleX, rotationMatrix);
-        matrixMultiply3D(rotationMatrix, cube);
-        getYRotationMatrix3D(angleY, rotationMatrix);
-        matrixMultiply3D(rotationMatrix, cube);
-        getZRotationMatrix3D(angleZ, rotationMatrix);
-        matrixMultiply3D(rotationMatrix, cube);
+        for (int i = 0; i < 3; i++) {
+            getRotationMatrix3D(angles, rotationMatrix, i);
+            matrixMultiply(rotationMatrix, &cube);
+        }
 
-        if (rotateX) angleX += dt * radianPerSecond;
-        if (rotateY) angleY += dt * radianPerSecond;
-        if (rotateZ) angleZ += dt * radianPerSecond;
+        if (rotateX) angles.x += dt * radianPerSecond;
+        if (rotateY) angles.y += dt * radianPerSecond;
+        if (rotateZ) angles.z += dt * radianPerSecond;
 
         if (nk_begin(ctx, "Canvas", nk_rect(0, 0, (float)winWidth, (float)winHeight), NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND)) {
             struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
             Proj zero, one;
-            for (int i = 0; i < 12; i++) {
+            for (int i = 0; i < cube.edgeCount; i++) {
+                float *start = cube.data + ((i*2 + 0) * cube.dimension);
+                float *end = cube.data + ((i*2 + 1) * cube.dimension);
                 if (projectionType) {
-                    zero = projectPerspective3D(cube[i].startX, cube[i].startY, cube[i].startZ, (float)winWidth, (float)winHeight, cameraDistance, fovY);
-                    one = projectPerspective3D(cube[i].endX, cube[i].endY, cube[i].endZ, (float)winWidth, (float)winHeight, cameraDistance, fovY);
+                    zero = projectPerspective3D(start[0], start[1], start[2], (float)winWidth, (float)winHeight, cameraDistance, fovY);
+                    one = projectPerspective3D(end[0], end[1], end[2],(float)winWidth, (float)winHeight, cameraDistance, fovY);
+                    //zero = projectPerspective3D(cube[i].startX, cube[i].startY, cube[i].startZ, (float)winWidth, (float)winHeight, cameraDistance, fovY);
+                    //one = projectPerspective3D(cube[i].endX, cube[i].endY, cube[i].endZ, (float)winWidth, (float)winHeight, cameraDistance, fovY);
                 } else {
-                    zero = projectNormal3D(cube[i].startX, cube[i].startY, (float)winWidth, (float)winHeight, scaleFactor);
-                    one = projectNormal3D(cube[i].endX, cube[i].endY, (float)winWidth, (float)winHeight, scaleFactor);
+                    zero = projectNormal3D(start[0], start[1], (float)winWidth, (float)winHeight, scaleFactor);
+                    one = projectNormal3D(end[0], end[1], (float)winWidth, (float)winHeight, scaleFactor);
+                    //zero = projectNormal3D(cube[i].startX, cube[i].startY, (float)winWidth, (float)winHeight, scaleFactor);
+                    //one = projectNormal3D(cube[i].endX, cube[i].endY, (float)winWidth, (float)winHeight, scaleFactor);
                 }
                 nk_stroke_line(canvas, zero.x, zero.y, one.x, one.y, 5.0f, nk_rgb(200, 200, 200));
             }
@@ -171,7 +170,8 @@ int main(void) {
     nk_glfw3_shutdown();
     glfwDestroyWindow(win);
     glfwTerminate();
-    free(cube);
+    free(cube.data);
+    free(originalCube.data);
     return EXIT_SUCCESS;
 }
 
@@ -197,12 +197,8 @@ EdgeList createCube(int dimension) {
       for (int d = 0; d < dimension; ++d) {
         int nb = v ^ (1 << d);
         if (v < nb) {
-          memcpy(&edgeData[idx * 2 * dimension],
-                 &coords[v * dimension],
-                 dimension * sizeof(float));
-          memcpy(&edgeData[idx * 2 * dimension + dimension],
-                 &coords[nb * dimension],
-                 dimension * sizeof(float));
+          memcpy(&edgeData[idx * 2 * dimension], &coords[v * dimension], dimension * sizeof(float));
+          memcpy(&edgeData[idx * 2 * dimension + dimension], &coords[nb * dimension], dimension * sizeof(float));
           ++idx;
         }
       }
@@ -235,45 +231,52 @@ Proj projectPerspective3D(float x, float y, float z, float screenW, float screen
     return (Proj){screenX, screenY};
 }
 
-void getXRotationMatrix3D(float angle, float out[9]) {
-    float c = cosf(angle);
-    float s = sinf(angle);
-
-    out[0] =  c; out[1] = 0; out[2] =  s; // [cos, 0,  sin]
-    out[3] =  0; out[4] = 1; out[5] =  0; // [0,   1,    0]
-    out[6] = -s; out[7] = 0; out[8] =  c; // [-sin, 0, cos]
+void getRotationMatrix3D(AngleList angle, float out[9], int axisType) {
+    float c;
+    float s;
+    if (axisType == 0) {
+        // Visual X rotation
+        c = cosf(angle.x);
+        s = sinf(angle.x);
+        out[0] =  c; out[1] = 0; out[2] =  s;
+        out[3] =  0; out[4] = 1; out[5] =  0; 
+        out[6] = -s; out[7] = 0; out[8] =  c; 
+    } else if (axisType == 1) {
+        // Visual Y rotation
+        c = cosf(angle.y);
+        s = sinf(angle.y);
+        out[0] = 1; out[1] = 0; out[2] = 0;
+        out[3] = 0; out[4] = c; out[5] = -s;
+        out[6] = 0; out[7] = s; out[8] = c;
+    } else {
+        // Visual Z rotation
+        c = cosf(angle.z);
+        s = sinf(angle.z);
+        out[0] =  c; out[1] = -s; out[2] =  0;
+        out[3] =  s; out[4] = c; out[5] =  0;
+        out[6] = 0; out[7] = 0; out[8] =  1;
+    }
 }
 
-void getYRotationMatrix3D(float angle, float out[9]) {
-    float c = cosf(angle);
-    float s = sinf(angle);
+void matrixMultiply(const float *m, EdgeList *list) {
+    int edge = list->edgeCount;
+    int dim = list->dimension;
 
-    out[0] = 1; out[1] = 0; out[2] = 0;
-    out[3] = 0; out[4] = c; out[5] = -s;
-    out[6] = 0; out[7] = s; out[8] = c;
-}
+    float temp[dim]; // malloc dim sized temp
 
-void getZRotationMatrix3D(float angle, float out[9]) {
-    float c = cosf(angle);
-    float s = sinf(angle);
+    for (int i = 0; i < edge; ++i) {
+        for (int j = 0; j < 2; ++j) {
+            float *points = list->data + ((i * 2 + j) * dim);
 
-    out[0] =  c; out[1] = -s; out[2] =  0;
-    out[3] =  s; out[4] = c; out[5] =  0;
-    out[6] = 0; out[7] = 0; out[8] =  1;
-}
-
-void matrixMultiply3D(float *m, LineCoordinate *cube) {
-    for (size_t i = 0; i < 12; i++) {
-        float sx = cube[i].startX, sy = cube[i].startY, sz = cube[i].startZ;
-        float ex = cube[i].endX, ey = cube[i].endY, ez = cube[i].endZ;
-
-        cube[i].startX = m[0]*sx + m[1]*sy + m[2]*sz;
-        cube[i].startY = m[3]*sx + m[4]*sy + m[5]*sz;
-        cube[i].startZ = m[6]*sx + m[7]*sy + m[8]*sz;
-
-        cube[i].endX = m[0]*ex + m[1]*ey + m[2]*ez;
-        cube[i].endY = m[3]*ex + m[4]*ey + m[5]*ez;
-        cube[i].endZ = m[6]*ex + m[7]*ey + m[8]*ez;
+            for (int k = 0; k < dim; ++k) {
+                float sum = 0.0f;
+                for (int l = 0; l < dim; ++l) {
+                    sum += m[k * dim + l] * points[k];
+                }
+                temp[k] = sum;
+            }
+            memcpy(points, temp, dim * sizeof(float));
+        }
     }
 }
 
@@ -319,5 +322,20 @@ float (*calculateEdges3D(void))[2][3] {
 
     memcpy(edgeList, temp, sizeof(temp));
     return edgeList;
+}
+
+void matrixMultiply3D(float *m, LineCoordinate *cube) {
+    for (size_t i = 0; i < 12; i++) {
+        float sx = cube[i].startX, sy = cube[i].startY, sz = cube[i].startZ;
+        float ex = cube[i].endX, ey = cube[i].endY, ez = cube[i].endZ;
+
+        cube[i].startX = m[0]*sx + m[1]*sy + m[2]*sz;
+        cube[i].startY = m[3]*sx + m[4]*sy + m[5]*sz;
+        cube[i].startZ = m[6]*sx + m[7]*sy + m[8]*sz;
+
+        cube[i].endX = m[0]*ex + m[1]*ey + m[2]*ez;
+        cube[i].endY = m[3]*ex + m[4]*ey + m[5]*ez;
+        cube[i].endZ = m[6]*ex + m[7]*ey + m[8]*ez;
+    }
 }
 */
