@@ -271,7 +271,7 @@ void matrixMultiply(const float *m, EdgeList *list) {
             for (int k = 0; k < dim; ++k) {
                 float sum = 0.0f;
                 for (int l = 0; l < dim; ++l) {
-                    sum += m[k * dim + l] * points[k];
+                    sum += m[k * dim + l] * points[l];
                 }
                 temp[k] = sum;
             }
