@@ -29,14 +29,14 @@
 #define MAX_ELEMENT_BUFFER 128 * 1024
 
 // Prototype definitions
-Proj projectPerspective(float, float, float, float, float, float, float);
-Proj projectNormal(float, float, float, float, float);
-LineCoordinate *initCube();
-float (*calculateEdges(void))[2][3];
-void getXRotationMatrix(float, float out[9]);
-void getYRotationMatrix(float, float out[9]);
-void getZRotationMatrix(float, float out[9]);
-void matrixMultiply(float *, LineCoordinate *);
+Proj projectPerspective3D(float, float, float, float, float, float, float);
+Proj projectNormal3D(float, float, float, float, float);
+LineCoordinate *initCube3D();
+float (*calculateEdges3D(void))[2][3];
+void getXRotationMatrix3D(float, float out[9]);
+void getYRotationMatrix3D(float, float out[9]);
+void getZRotationMatrix3D(float, float out[9]);
+void matrixMultiply3D(float *, LineCoordinate *);
 
 int main(void) {
     printf("Starting program...\n");
@@ -67,8 +67,8 @@ int main(void) {
 
     struct nk_glfw glfw = {0};
     struct nk_context *ctx = nk_glfw3_init(win, NK_GLFW3_INSTALL_CALLBACKS);
-    LineCoordinate *cube = initCube();
-    LineCoordinate *originalCube = initCube();
+    LineCoordinate *cube = initCube3D();
+    LineCoordinate *originalCube = initCube3D();
     if (!cube) {
         printf("Cube memory allocation failed for some reason");
     }
@@ -138,12 +138,12 @@ int main(void) {
         }
         nk_end(ctx);
 
-        getXRotationMatrix(angleX, rotationMatrix);
-        matrixMultiply(rotationMatrix, cube);
-        getYRotationMatrix(angleY, rotationMatrix);
-        matrixMultiply(rotationMatrix, cube);
-        getZRotationMatrix(angleZ, rotationMatrix);
-        matrixMultiply(rotationMatrix, cube);
+        getXRotationMatrix3D(angleX, rotationMatrix);
+        matrixMultiply3D(rotationMatrix, cube);
+        getYRotationMatrix3D(angleY, rotationMatrix);
+        matrixMultiply3D(rotationMatrix, cube);
+        getZRotationMatrix3D(angleZ, rotationMatrix);
+        matrixMultiply3D(rotationMatrix, cube);
 
         if (rotateX) angleX += dt * radianPerSecond;
         if (rotateY) angleY += dt * radianPerSecond;
@@ -154,11 +154,11 @@ int main(void) {
             Proj zero, one;
             for (int i = 0; i < 12; i++) {
                 if (projectionType) {
-                    zero = projectPerspective(cube[i].startX, cube[i].startY, cube[i].startZ, (float)winWidth, (float)winHeight, cameraDistance, fovY);
-                    one = projectPerspective(cube[i].endX, cube[i].endY, cube[i].endZ, (float)winWidth, (float)winHeight, cameraDistance, fovY);
+                    zero = projectPerspective3D(cube[i].startX, cube[i].startY, cube[i].startZ, (float)winWidth, (float)winHeight, cameraDistance, fovY);
+                    one = projectPerspective3D(cube[i].endX, cube[i].endY, cube[i].endZ, (float)winWidth, (float)winHeight, cameraDistance, fovY);
                 } else {
-                    zero = projectNormal(cube[i].startX, cube[i].startY, (float)winWidth, (float)winHeight, scaleFactor);
-                    one = projectNormal(cube[i].endX, cube[i].endY, (float)winWidth, (float)winHeight, scaleFactor);
+                    zero = projectNormal3D(cube[i].startX, cube[i].startY, (float)winWidth, (float)winHeight, scaleFactor);
+                    one = projectNormal3D(cube[i].endX, cube[i].endY, (float)winWidth, (float)winHeight, scaleFactor);
                 }
                 nk_stroke_line(canvas, zero.x, zero.y, one.x, one.y, 5.0f, nk_rgb(200, 200, 200));
             }
@@ -175,9 +175,9 @@ int main(void) {
     return EXIT_SUCCESS;
 }
 
-LineCoordinate *initCube() {
+LineCoordinate *initCube3D() {
     int corners = 8, sides = 12, dimension = 3;
-    float (*edgesList)[2][3] = calculateEdges(); // 6 * 2 * 3
+    float (*edgesList)[2][3] = calculateEdges3D(); // 6 * 2 * 3
     if (!edgesList) return NULL;
     LineCoordinate *cube = malloc(sides * sizeof(LineCoordinate));
     if (!cube) return NULL;
@@ -192,7 +192,7 @@ LineCoordinate *initCube() {
     return cube;
 }
 
-float (*calculateEdges(void))[2][3] {
+float (*calculateEdges3D(void))[2][3] {
     float (*edgeList)[2][3] = malloc(12 * sizeof(*edgeList));
     if (!edgeList) return NULL;
     
@@ -215,11 +215,11 @@ float (*calculateEdges(void))[2][3] {
     return edgeList;
     }
 
-Proj projectNormal(float x, float y, float screenW, float screenH, float scaleFactor) {
+Proj projectNormal3D(float x, float y, float screenW, float screenH, float scaleFactor) {
     return (Proj){x * screenW * scaleFactor + (screenW * 0.5f), y * screenH * scaleFactor + (screenH * 0.5f)};
 }
 
-Proj projectPerspective(float x, float y, float z, float screenW, float screenH, float camDistance, float fovY) {
+Proj projectPerspective3D(float x, float y, float z, float screenW, float screenH, float camDistance, float fovY) {
     float aspectRatio = screenW / screenH;
     float fovY_radius = fovY * M_PI / 180.0f;
     float f = 1.0f / tan(fovY_radius / 2.0f);
@@ -235,7 +235,7 @@ Proj projectPerspective(float x, float y, float z, float screenW, float screenH,
     return (Proj){screenX, screenY};
 }
 
-void getXRotationMatrix(float angle, float out[9]) {
+void getXRotationMatrix3D(float angle, float out[9]) {
     float c = cosf(angle);
     float s = sinf(angle);
 
@@ -244,7 +244,7 @@ void getXRotationMatrix(float angle, float out[9]) {
     out[6] = -s; out[7] = 0; out[8] =  c; // [-sin, 0, cos]
 }
 
-void getYRotationMatrix(float angle, float out[9]) {
+void getYRotationMatrix3D(float angle, float out[9]) {
     float c = cosf(angle);
     float s = sinf(angle);
 
@@ -253,7 +253,7 @@ void getYRotationMatrix(float angle, float out[9]) {
     out[6] = 0; out[7] = s; out[8] = c;
 }
 
-void getZRotationMatrix(float angle, float out[9]) {
+void getZRotationMatrix3D(float angle, float out[9]) {
     float c = cosf(angle);
     float s = sinf(angle);
 
@@ -262,7 +262,7 @@ void getZRotationMatrix(float angle, float out[9]) {
     out[6] = 0; out[7] = 0; out[8] =  1;
 }
 
-void matrixMultiply(float *m, LineCoordinate *cube) {
+void matrixMultiply3D(float *m, LineCoordinate *cube) {
     for (size_t i = 0; i < 12; i++) {
         float sx = cube[i].startX, sy = cube[i].startY, sz = cube[i].startZ;
         float ex = cube[i].endX, ey = cube[i].endY, ez = cube[i].endZ;
