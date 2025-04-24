@@ -1,8 +1,0 @@
-{
-    "C_Cpp.errorSquiggles": "enabled",
-    "files.associations": {
-        "glfw3.h": "c",
-        "glad.h": "c",
-        "types.h": "c"
-    }
-}
