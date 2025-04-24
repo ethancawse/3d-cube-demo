@@ -28,11 +28,10 @@
 #define MAX_VERTEX_BUFFER 512 * 1024
 #define MAX_ELEMENT_BUFFER 128 * 1024
 
-// Prototype definitions
+// Prototypes
 Proj projectPerspective3D(float, float, float, float, float, float, float);
 Proj projectNormal3D(float, float, float, float, float);
-LineCoordinate *initCube3D();
-float (*calculateEdges3D(void))[2][3];
+EdgeList createCube(int);
 void getXRotationMatrix3D(float, float out[9]);
 void getYRotationMatrix3D(float, float out[9]);
 void getZRotationMatrix3D(float, float out[9]);
@@ -92,6 +91,7 @@ int main(void) {
     float cameraDistance = 1.5f;
     float fovY = 90.0f;
     float radianPerSecond = 50.0f * (M_PI/180.0f);
+    int dimension = 3;
 
     while (!glfwWindowShouldClose(win)) {
         glfwPollEvents();
@@ -175,45 +175,45 @@ int main(void) {
     return EXIT_SUCCESS;
 }
 
-LineCoordinate *initCube3D() {
-    int corners = 8, sides = 12, dimension = 3;
-    float (*edgesList)[2][3] = calculateEdges3D(); // 6 * 2 * 3
-    if (!edgesList) return NULL;
-    LineCoordinate *cube = malloc(sides * sizeof(LineCoordinate));
-    if (!cube) return NULL;
-    for (int i = 0; i < sides; i++) {
-        for(int j = 0; j < 2; j++) {
-            for (int k = 0; k < dimension; k++) {
-                *((float *)((LineCoordinate *)((char *)cube + (i*sizeof(LineCoordinate) + (j * sizeof(float) * 3) + k * sizeof(float))))) = edgesList[i][j][k];
-            }
+EdgeList createCube(int dimension) {
+    EdgeList list = {0};
+    int verts = 1 << dimension;
+    int edges = dimension * (1 << (dimension - 1));
+
+    float *coords = malloc(verts * dimension * sizeof(float));
+    float *edgeData = malloc(edges * 2 * dimension * sizeof(float));
+    if (!coords || !edgeData) {
+        free(coords);
+        free(edgeData);
+        return list;
+    }
+
+    for (int v = 0; v < verts; ++v)
+      for (int d = 0; d < dimension; ++d)
+        coords[v*dimension + d] = (v & (1<<d)) ? +0.5f : -0.5f;
+
+    int idx = 0;
+    for (int v = 0; v < verts; ++v) {
+      for (int d = 0; d < dimension; ++d) {
+        int nb = v ^ (1 << d);
+        if (v < nb) {
+          memcpy(&edgeData[idx * 2 * dimension],
+                 &coords[v * dimension],
+                 dimension * sizeof(float));
+          memcpy(&edgeData[idx * 2 * dimension + dimension],
+                 &coords[nb * dimension],
+                 dimension * sizeof(float));
+          ++idx;
         }
+      }
     }
-    free(edgesList);
-    return cube;
+
+    free(coords);
+    list.edgeCount = edges;
+    list.dimension = dimension;
+    list.data = edgeData;
+    return list;
 }
-
-float (*calculateEdges3D(void))[2][3] {
-    float (*edgeList)[2][3] = malloc(12 * sizeof(*edgeList));
-    if (!edgeList) return NULL;
-    
-    float temp[12][2][3] = {
-        {{-0.5, -0.5, -0.5}, {0.5, -0.5, -0.5}},
-        {{-0.5, -0.5, -0.5}, {-0.5, 0.5, -0.5}},
-        {{-0.5, -0.5, -0.5}, {-0.5, -0.5, 0.5}}, 
-        {{0.5, 0.5, 0.5}, {-0.5, 0.5, 0.5}},
-        {{0.5, 0.5, 0.5}, {0.5, -0.5, 0.5}},
-        {{0.5, 0.5, 0.5}, {0.5, 0.5, -0.5}},
-        {{-0.5, 0.5, -0.5}, {-0.5, 0.5, 0.5}},
-        {{-0.5, 0.5, -0.5}, {0.5, 0.5, -0.5}},
-        {{-0.5, -0.5, 0.5}, {-0.5, 0.5, 0.5}},
-        {{-0.5, -0.5, 0.5}, {0.5, -0.5, 0.5}},
-        {{0.5, -0.5, -0.5}, {0.5, -0.5, 0.5}},
-        {{0.5, -0.5, -0.5}, {0.5, 0.5, -0.5}},
-    };
-
-    memcpy(edgeList, temp, sizeof(temp));
-    return edgeList;
-    }
 
 Proj projectNormal3D(float x, float y, float screenW, float screenH, float scaleFactor) {
     return (Proj){x * screenW * scaleFactor + (screenW * 0.5f), y * screenH * scaleFactor + (screenH * 0.5f)};
@@ -276,3 +276,48 @@ void matrixMultiply3D(float *m, LineCoordinate *cube) {
         cube[i].endZ = m[6]*ex + m[7]*ey + m[8]*ez;
     }
 }
+
+/*
+Old manual implementation
+
+LineCoordinate *initCube3D() {
+    int corners = 8, sides = 12, dimension = 3;
+    float (*edgesList)[2][3] = calculateEdges3D();
+    if (!edgesList) return NULL;
+    LineCoordinate *cube = malloc(sides * sizeof(LineCoordinate));
+    if (!cube) return NULL;
+    for (int i = 0; i < sides; i++) {
+        for(int j = 0; j < 2; j++) {
+            for (int k = 0; k < dimension; k++) {
+                // God awful way of filling the structs with manual pointer offsets, only did this to prove that I know how pointers work
+                *((float *)((LineCoordinate *)((char *)cube + (i*sizeof(LineCoordinate) + (j * sizeof(float) * 3) + k * sizeof(float))))) = edgesList[i][j][k];
+            }
+        }
+    }
+    free(edgesList);
+    return cube;
+}
+
+float (*calculateEdges3D(void))[2][3] {
+    float (*edgeList)[2][3] = malloc(12 * sizeof(*edgeList));
+    if (!edgeList) return NULL;
+    
+    float temp[12][2][3] = {
+        {{-0.5, -0.5, -0.5}, {0.5, -0.5, -0.5}},
+        {{-0.5, -0.5, -0.5}, {-0.5, 0.5, -0.5}},
+        {{-0.5, -0.5, -0.5}, {-0.5, -0.5, 0.5}}, 
+        {{0.5, 0.5, 0.5}, {-0.5, 0.5, 0.5}},
+        {{0.5, 0.5, 0.5}, {0.5, -0.5, 0.5}},
+        {{0.5, 0.5, 0.5}, {0.5, 0.5, -0.5}},
+        {{-0.5, 0.5, -0.5}, {-0.5, 0.5, 0.5}},
+        {{-0.5, 0.5, -0.5}, {0.5, 0.5, -0.5}},
+        {{-0.5, -0.5, 0.5}, {-0.5, 0.5, 0.5}},
+        {{-0.5, -0.5, 0.5}, {0.5, -0.5, 0.5}},
+        {{0.5, -0.5, -0.5}, {0.5, -0.5, 0.5}},
+        {{0.5, -0.5, -0.5}, {0.5, 0.5, -0.5}},
+    };
+
+    memcpy(edgeList, temp, sizeof(temp));
+    return edgeList;
+}
+*/
