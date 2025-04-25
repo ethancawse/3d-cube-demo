@@ -7,7 +7,7 @@
     <string>Cube Demo</string>
 
     <key>CFBundleIdentifier</key>
-    <string>com.3lit3hax.3d-cube-demo</string>
+    <string>com.3lit3hax.cube-demo</string>
 
     <key>CFBundleShortVersionString</key>
     <string>1.0</string>
@@ -17,7 +17,7 @@
 
     <!-- The executable filename (matches your target name) -->
     <key>CFBundleExecutable</key>
-    <string>3d-cube-demo</string>
+    <string>cube-demo</string>
 
     <key>CFBundlePackageType</key>
     <string>APPL</string>
