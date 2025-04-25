@@ -30,10 +30,13 @@
 
 // Prototypes
 Proj projectPerspective3D(float, float, float, float, float, float, float);
-Proj projectNormal3D(float, float, float, float, float);
-EdgeList createCube(int);
+Proj projectOrthoN(const float *, int, float, float, float);
+EdgeList createCubeN(int);
+void projectHyper4Dto3D(const float *pt4, int dim, float screenW, float screenH, float cam4DDistance, float fov4D, Proj *out, float cameraDistance, float fovY);
+void flatten4Dto3D(const float *pt4, float out3[3]);
 void getRotationMatrix3D(AngleList, float out[9], int);
-void matrixMultiply(const float *, EdgeList *);
+void getRotationMatrix4D(AngleList, float out[16], int);
+void matrixMultiplyN(const float *, EdgeList *);
 
 int main(void) {
     printf("Starting program...\n");
@@ -77,22 +80,25 @@ int main(void) {
     float fpsAccumulator = 0.0f;
     int fpsFrameCount = 0;
     int rotateX = 0, rotateY = 0, rotateZ = 0;
+    int rotateXY = 0, rotateXZ = 0, rotateXW = 0, rotateYZ = 0, rotateYW = 0, rotateZW = 0;
     int projectionType = 0;
     float scaleFactor = 0.5f;
     float cameraDistance = 1.5f;
     float fovY = 90.0f;
+    float hyperCamDistance = 1.5f;
+    float hyperFov = 90.0f;
     float radianPerSecond = 50.0f * (M_PI/180.0f);
-    int dimension = 3;
+    int dimension = 3, oldDimension = 3;
 
-    EdgeList cube = createCube(dimension);
-    EdgeList originalCube = createCube(dimension);
+    EdgeList cube = createCubeN(dimension);
+    EdgeList originalCube = createCubeN(dimension);
     if (!cube.data || !originalCube.data) printf("Cube memory allocation failed for some reason.");
 
     while (!glfwWindowShouldClose(win)) {
         glfwPollEvents();
         nk_glfw3_new_frame();
 
-        float rotationMatrix[9];
+        float rotationMatrix[16];
         int frameBufferWidth, frameBufferHeight, winWidth, winHeight;
         glfwGetFramebufferSize(win, &frameBufferWidth, &frameBufferHeight);
         glViewport(0, 0, frameBufferWidth, frameBufferHeight);
@@ -117,48 +123,124 @@ int main(void) {
         }
         memcpy(cube.data, originalCube.data, cube.edgeCount * 2 * cube.dimension * sizeof(float)); // reset cube
 
-        if (nk_begin(ctx, "Rotation Controls", nk_rect(10, 10, 150, 90), NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR)) {
-            nk_layout_row_dynamic(ctx, 10, 1);
-            nk_checkbox_label(ctx, "Rotate X", &rotateX);
-            nk_checkbox_label(ctx, "Rotate Y", &rotateY);
-            nk_checkbox_label(ctx, "Rotate Z", &rotateZ);
+        if (nk_begin(ctx, "Dimension Controls", nk_rect(10, 10, 150, 70), NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR)) {
+            nk_layout_row_dynamic(ctx, 25, 1);
+            nk_property_int(ctx, "Dimension:", 3, &dimension, 5, 1, 10.0f);
         }
         nk_end(ctx);
 
-        if (nk_begin(ctx, "Projection Controls", nk_rect(170, 10, 170, 80), NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR)) {
-            nk_layout_row_dynamic(ctx, 10, 1);
-            nk_checkbox_label(ctx, "Perspective", &projectionType);
-            nk_property_float(ctx, "Distance", 0.1f, &cameraDistance, 10, 0.1f, 0.1f);
-            nk_property_float(ctx, "FOV", 20, &fovY, 180, 5.0f, 5.0f);
-        }
-        nk_end(ctx);
+        if (dimension == 3) {
+            if (nk_begin(ctx, "3D Rotation Controls", nk_rect(170, 10, 170, 90), NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR)) {
+                nk_layout_row_dynamic(ctx, 10, 1);
+                nk_checkbox_label(ctx, "Rotate X", &rotateX);
+                nk_checkbox_label(ctx, "Rotate Y", &rotateY);
+                nk_checkbox_label(ctx, "Rotate Z", &rotateZ);
+            }
+            nk_end(ctx);
 
-        for (int i = 0; i < 3; i++) {
-            getRotationMatrix3D(angles, rotationMatrix, i);
-            matrixMultiply(rotationMatrix, &cube);
+            if (nk_begin(ctx, "3D Projection Controls", nk_rect(350, 10, 190, !projectionType ? 60 : 100), NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR)) {
+                nk_layout_row_dynamic(ctx, 15, 1);
+                nk_checkbox_label(ctx, "Perspective", &projectionType);
+                if (projectionType) {
+                    nk_property_float(ctx, "Distance", 0.1f, &cameraDistance, 10, 0.1f, 0.1f);
+                    nk_property_float(ctx, "FOV", 20, &fovY, 180, 5.0f, 5.0f);
+                }
+            }
+            nk_end(ctx);
+        } else if (dimension == 4) {
+            if (nk_begin(ctx, "4D Rotation Controls", nk_rect(170, 10, 170, 90), NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR)) {
+                nk_layout_row_dynamic(ctx, 10, 2);
+                nk_checkbox_label(ctx, "XY", &rotateXY);
+                nk_checkbox_label(ctx, "XZ", &rotateXZ);
+                nk_checkbox_label(ctx, "XW", &rotateXW);
+                nk_checkbox_label(ctx, "YZ", &rotateYZ);
+                nk_checkbox_label(ctx, "YW", &rotateYW);
+                nk_checkbox_label(ctx, "ZW", &rotateZW);
+            }
+            nk_end(ctx);
+
+            if (nk_begin(ctx, "4D Projection Controls", nk_rect(350, 10, 200, !projectionType ? 60 : 135), NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR)) {
+                nk_layout_row_dynamic(ctx, 15, 1);
+                nk_checkbox_label(ctx, "Perspective", &projectionType);
+                if (projectionType) {
+                    nk_property_float(ctx, "Distance", 0.1f, &cameraDistance, 10, 0.1f, 0.1f);
+                    nk_property_float(ctx, "Hyper Distance", 0.1f, &hyperCamDistance, 10, 0.1f, 0.1f);
+                    nk_property_float(ctx, "FOV", 20, &fovY, 180, 5.0f, 5.0f);
+                    nk_property_float(ctx, "Hyper FOV", 20, &hyperFov, 180, 5.0f, 5.0f);
+                }
+            }
+            nk_end(ctx);
         }
 
-        if (rotateX) angles.x += dt * radianPerSecond;
-        if (rotateY) angles.y += dt * radianPerSecond;
-        if (rotateZ) angles.z += dt * radianPerSecond;
+        if (dimension != oldDimension) {
+            free(cube.data);
+            free(originalCube.data);
+            cube = createCubeN(dimension);
+            originalCube = createCubeN(dimension);
+            if (oldDimension == 3) {
+                rotateX = 0; rotateY = 0; rotateZ = 0;
+                angles.x = 0.0f; angles.y = 0.0f; angles.z = 0.0f;
+            } else if (oldDimension == 4) {
+                rotateXW = 0; rotateXY = 0; rotateXZ = 0; rotateYW = 0; rotateYZ = 0; rotateZW = 0;
+                angles.u = 0.0f; angles.v = 0.0f; angles.w = 0.0f; angles.x = 0.0f; angles.y = 0.0f; angles.z = 0.0f;
+            }
+            projectionType = 0;
+            oldDimension = dimension;
+        }
+
+        if (dimension == 3) {
+            for (int i = 0; i < dimension; i++) {
+                getRotationMatrix3D(angles, rotationMatrix, i);
+                matrixMultiplyN(rotationMatrix, &cube);
+            }
+            if (rotateX) angles.x += dt * radianPerSecond;
+            if (rotateY) angles.y += dt * radianPerSecond;
+            if (rotateZ) angles.z += dt * radianPerSecond;
+        } else if (dimension == 4) {
+            float mat4[16];
+            getRotationMatrix4D(angles, mat4, 0); matrixMultiplyN(mat4, &cube);
+            getRotationMatrix4D(angles, mat4, 1); matrixMultiplyN(mat4, &cube);
+            getRotationMatrix4D(angles, mat4, 2); matrixMultiplyN(mat4, &cube);
+            getRotationMatrix4D(angles, mat4, 3); matrixMultiplyN(mat4, &cube);
+            getRotationMatrix4D(angles, mat4, 4); matrixMultiplyN(mat4, &cube);
+            getRotationMatrix4D(angles, mat4, 5); matrixMultiplyN(mat4, &cube);
+
+            if (rotateXY) angles.u += dt * radianPerSecond;
+            if (rotateXZ) angles.v += dt * radianPerSecond;
+            if (rotateXW) angles.w += dt * radianPerSecond;
+            if (rotateYZ) angles.x += dt * radianPerSecond;
+            if (rotateYW) angles.y += dt * radianPerSecond;
+            if (rotateZW) angles.z += dt * radianPerSecond;
+        }
 
         if (nk_begin(ctx, "Canvas", nk_rect(0, 0, (float)winWidth, (float)winHeight), NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND)) {
             struct nk_command_buffer *canvas = nk_window_get_canvas(ctx);
             Proj zero, one;
+            float start3D[3], end3D[3];
             for (int i = 0; i < cube.edgeCount; i++) {
-                float *start = cube.data + ((i*2 + 0) * cube.dimension);
-                float *end = cube.data + ((i*2 + 1) * cube.dimension);
-                if (projectionType) {
-                    zero = projectPerspective3D(start[0], start[1], start[2], (float)winWidth, (float)winHeight, cameraDistance, fovY);
-                    one = projectPerspective3D(end[0], end[1], end[2],(float)winWidth, (float)winHeight, cameraDistance, fovY);
-                    //zero = projectPerspective3D(cube[i].startX, cube[i].startY, cube[i].startZ, (float)winWidth, (float)winHeight, cameraDistance, fovY);
-                    //one = projectPerspective3D(cube[i].endX, cube[i].endY, cube[i].endZ, (float)winWidth, (float)winHeight, cameraDistance, fovY);
+                if (projectionType && dimension == 3) {
+                    float *start = cube.data + ((i * 2 + 0) * 3);
+                    float *end = cube.data + ((i * 2 + 1) * 3);
+                    zero = projectPerspective3D(start[0], start[1], start[2], winWidth, winHeight, cameraDistance, fovY);
+                    one  = projectPerspective3D(end[0], end[1], end[2], winWidth, winHeight, cameraDistance, fovY);
+
+                } else if (projectionType && dimension == 4) {
+                    float *start4D = cube.data + ((i * 2 + 0 ) * 4);
+                    float *end4D = cube.data + ((i * 2 + 1) * 4);
+                    projectHyper4Dto3D(start4D, 4, winWidth, winHeight, hyperCamDistance, hyperFov, &zero, cameraDistance, fovY);
+                    projectHyper4Dto3D(end4D, 4, winWidth, winHeight, hyperCamDistance, hyperFov, &one, cameraDistance, fovY);
+                
                 } else {
-                    zero = projectNormal3D(start[0], start[1], (float)winWidth, (float)winHeight, scaleFactor);
-                    one = projectNormal3D(end[0], end[1], (float)winWidth, (float)winHeight, scaleFactor);
-                    //zero = projectNormal3D(cube[i].startX, cube[i].startY, (float)winWidth, (float)winHeight, scaleFactor);
-                    //one = projectNormal3D(cube[i].endX, cube[i].endY, (float)winWidth, (float)winHeight, scaleFactor);
+                    float *startN = cube.data + ((i * 2 + 0) * cube.dimension);
+                    float *endN = cube.data + ((i * 2 + 1) * cube.dimension);
+                    if (dimension == 4) {
+                        flatten4Dto3D(startN, start3D);
+                        flatten4Dto3D(endN, end3D);
+                    }
+                    zero = projectOrthoN(dimension == 3 ? startN : start3D, 3, winWidth, winHeight, scaleFactor);
+                    one  = projectOrthoN(dimension == 3 ? endN : end3D, 3, winWidth, winHeight, scaleFactor);
                 }
+
                 nk_stroke_line(canvas, zero.x, zero.y, one.x, one.y, 5.0f, nk_rgb(200, 200, 200));
             }
         }
@@ -175,7 +257,7 @@ int main(void) {
     return EXIT_SUCCESS;
 }
 
-EdgeList createCube(int dimension) {
+EdgeList createCubeN(int dimension) {
     EdgeList list = {0};
     int verts = 1 << dimension;
     int edges = dimension * (1 << (dimension - 1));
@@ -211,8 +293,11 @@ EdgeList createCube(int dimension) {
     return list;
 }
 
-Proj projectNormal3D(float x, float y, float screenW, float screenH, float scaleFactor) {
-    return (Proj){x * screenW * scaleFactor + (screenW * 0.5f), y * screenH * scaleFactor + (screenH * 0.5f)};
+Proj projectOrthoN(const float *pt, int dimension, float screenW, float screenH, float scaleFactor) {
+    float x = (dimension > 0 ? pt[0] : 0.0f);
+    float y = (dimension > 1 ? pt[1] : 0.0f);
+
+    return (Proj){ x * screenW  * scaleFactor + (screenW  * 0.5f), y * screenH  * scaleFactor + (screenH  * 0.5f) };
 }
 
 Proj projectPerspective3D(float x, float y, float z, float screenW, float screenH, float camDistance, float fovY) {
@@ -231,6 +316,22 @@ Proj projectPerspective3D(float x, float y, float z, float screenW, float screen
     return (Proj){screenX, screenY};
 }
 
+void projectHyper4Dto3D(const float *pt4, int dim, float screenW, float screenH, float cam4DDistance, float fov4D, Proj *out, float cameraDistance, float fovY) {
+    float f4 = 1.0f / tanf(fov4D * (M_PI/180.0f) * 0.5f);
+    float wOffset = cam4DDistance + pt4[3];
+    if (wOffset < 0.01f) wOffset = 0.01f;
+    float x3 = (pt4[0]*f4/ ((float)screenW / screenH)) / wOffset;
+    float y3 = (pt4[1]*f4) / wOffset;
+    float z3 = (pt4[2]*f4) / wOffset;
+    *out = projectPerspective3D(x3, y3, z3, screenW, screenH, cameraDistance, fovY);
+}
+
+void flatten4Dto3D(const float *pt4, float out3[3]) {
+    out3[0] = pt4[0];
+    out3[1] = pt4[1];
+    out3[2] = pt4[2] + pt4[3];
+}
+
 void getRotationMatrix3D(AngleList angle, float out[9], int axisType) {
     float c;
     float s;
@@ -238,9 +339,9 @@ void getRotationMatrix3D(AngleList angle, float out[9], int axisType) {
         // Visual X rotation
         c = cosf(angle.x);
         s = sinf(angle.x);
-        out[0] =  c; out[1] = 0; out[2] =  s;
-        out[3] =  0; out[4] = 1; out[5] =  0; 
-        out[6] = -s; out[7] = 0; out[8] =  c; 
+        out[0] = c; out[1] = 0; out[2] = s;
+        out[3] = 0; out[4] = 1; out[5] = 0; 
+        out[6] = -s; out[7] = 0; out[8] = c; 
     } else if (axisType == 1) {
         // Visual Y rotation
         c = cosf(angle.y);
@@ -258,7 +359,54 @@ void getRotationMatrix3D(AngleList angle, float out[9], int axisType) {
     }
 }
 
-void matrixMultiply(const float *m, EdgeList *list) {
+void getRotationMatrix4D(AngleList angle, float out[16], int planeType) {
+    memset(out, 0, 16 * sizeof(float));
+    out[0] = 1.0f; out[5] = 1.0f; out[10] = 1.0f; out[15] = 1.0f;
+    float c, s;
+    switch (planeType) {
+        case 0: // XY‐plane
+            c = cosf(angle.u);
+            s = sinf(angle.u);
+            out[0] = c; out[1] = -s;
+            out[4] = s; out[5] = c;
+            break;
+        case 1: // XZ‐plane
+            c = cosf(angle.v);
+            s = sinf(angle.v);
+            out[0] = c; out[2] = -s;
+            out[8] = s; out[10] = c;
+            break;
+        case 2: // XW‐plane
+            c = cosf(angle.w);
+            s = sinf(angle.w);
+            out[0] = c; out[3] = -s;
+            out[12] = s; out[15] = c;
+            break;
+        case 3: // YZ‐plane
+            c = cosf(angle.x);
+            s = sinf(angle.x);
+            out[5] = c; out[6] = -s;
+            out[9] = s; out[10] = c;
+            break;
+        case 4: // YW‐plane
+            c = cosf(angle.y);
+            s = sinf(angle.y);
+            out[5] = c; out[7] = -s;
+            out[13] = s; out[15] = c;
+            break;
+        case 5: // ZW‐plane
+            c = cosf(angle.z);
+            s = sinf(angle.z);
+            out[10] = c; out[11] = -s;
+            out[14] = s; out[15] = c;
+            break;
+        default:
+        // leave as identity
+        break;
+    }
+}
+
+void matrixMultiplyN(const float *m, EdgeList *list) {
     int edge = list->edgeCount;
     int dim = list->dimension;
 
@@ -337,5 +485,9 @@ void matrixMultiply3D(float *m, LineCoordinate *cube) {
         cube[i].endY = m[3]*ex + m[4]*ey + m[5]*ez;
         cube[i].endZ = m[6]*ex + m[7]*ey + m[8]*ez;
     }
+}
+
+Proj projectNormal3D(float x, float y, float screenW, float screenH, float scaleFactor) {
+    return (Proj){x * screenW * scaleFactor + (screenW * 0.5f), y * screenH * scaleFactor + (screenH * 0.5f)};
 }
 */
