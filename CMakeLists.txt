@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(3d-cube-demo VERSION 1.0 LANGUAGES C)
+project(cube-demo VERSION 1.0 LANGUAGES C)
 
 # Defaults
 if(NOT CMAKE_BUILD_TYPE)
